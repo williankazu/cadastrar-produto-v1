@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cadastro de Produtos • Markup, Margem, PV • EAN-13 BR • Etiquetas & A4</title>
+
+<!-- Bulma -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+<!-- Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+<!-- SheetJS (Excel/CSV) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- jsPDF + AutoTable -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+<!-- JsBarcode (EAN-13) -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<!-- QRious (QR Code) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<section class="container-box">
+
+  <!-- Header -->
+  <div class="card is-glass mb-4">
+    <div class="card-content">
+      <div class="columns is-vcentered">
+        <div class="column">
+          <h1 class="title is-3">Cadastro de Produtos • Markup, Margem e Preço de Venda</h1>
+          <p class="subtitle is-6">
+            PV mínimo bloqueado (≥ custo efetivo), tributos detalhados (ICMS/PIS/COFINS/ST), EAN-13 BR (789/790),
+            filtros/ordenação, etiquetas com logo + QR e PDF, e **A4 (20 itens)**.
+          </p>
+        </div>
+        <div class="column is-narrow">
+          <div class="buttons">
+            <button id="btnExportCSV" class="button is-link"><i class="fa-solid fa-file-csv mr-2"></i>CSV</button>
+            <button id="btnExportXLSX" class="button is-info"><i class="fa-solid fa-file-excel mr-2"></i>Excel</button>
+            <button id="btnExportPDF" class="button is-danger"><i class="fa-solid fa-file-pdf mr-2"></i>Relatório PDF</button>
+            <div class="file is-primary">
+              <label class="file-label">
+                <input id="fileImport" class="file-input" type="file" accept=".csv,.xlsx,.xls" />
+                <span class="file-cta">
+                  <span class="file-icon"><i class="fa-solid fa-file-arrow-up"></i></span>
+                  <span class="file-label">Importar</span>
+                </span>
+              </label>
+            </div>
+            <button id="btnLabelsPDF" class="button is-primary"><i class="fa-solid fa-tags mr-2"></i>Etiquetas PDF</button>
+            <button id="btnA4Simple" class="button is-warning"><i class="fa-solid fa-print mr-2"></i>A4 (20 itens)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="columns is-multiline">
+        <div class="column is-6">
+          <p class="help is-note">
+            <strong>Tributos (%)</strong> = ICMS + PIS + COFINS + ST (soma simples, aproximação).<br>
+            <strong>Bloqueio:</strong> Preço de venda não pode ser menor que o <em>custo efetivo</em> (custo + tributos).
+          </p>
+        </div>
+        <div class="column is-6">
+          <div class="field">
+            <label class="label">Logo para etiquetas (upload)</label>
+            <div class="control">
+              <input id="logoInput" type="file" accept="image/*" class="input">
+              <img id="logoPreview" class="logo-preview" alt="Prévia do logo" />
+            </div>
+            <p class="help">Opcional. O logo será embutido nas etiquetas em PDF. Fica salvo no navegador.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card is-glass mb-4">
+    <div class="card-content">
+      <div class="columns is-multiline">
+        <div class="column is-6">
+          <div class="field">
+            <label class="label">Buscar</label>
+            <div class="control has-icons-left">
+              <input id="filtroBusca" class="input" type="text" placeholder="Descrição, categoria ou fornecedor..." />
+              <span class="icon is-left"><i class="fa-solid fa-magnifying-glass"></i></span>
+            </div>
+          </div>
+        </div>
+        <div class="column is-4">
+          <div class="field">
+            <label class="label">Categoria</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="filtroCategoria">
+                  <option value="">Todas</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-2">
+          <label class="label">&nbsp;</label>
+          <button id="btnLimparFiltros" class="button is-light is-fullwidth"><i class="fa-solid fa-filter-circle-xmark mr-2"></i>Limpar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulário -->
+  <div class="card is-glass mb-4">
+    <div class="card-content">
+      <h2 class="title is-5">Novo produto</h2>
+
+      <div class="columns is-multiline">
+        <div class="column is-6">
+          <div class="field">
+            <label class="label is-required">Descrição</label>
+            <div class="control">
+              <input id="descricao" class="input" type="text" placeholder="Ex.: Cimento CP2 50kg" />
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-3">
+          <div class="field">
+            <label class="label">Categoria</label>
+            <div class="control"><input id="categoria" class="input" type="text" placeholder="Ex.: Materiais" /></div>
+          </div>
+        </div>
+
+        <div class="column is-3">
+          <div class="field">
+            <label class="label">Fornecedor</label>
+            <div class="control"><input id="fornecedor" class="input" type="text" placeholder="Ex.: ACME" /></div>
+          </div>
+        </div>
+
+        <div class="column is-3">
+          <div class="field">
+            <label class="label is-required">Preço de custo (R$)</label>
+            <div class="control has-icons-left">
+              <input id="preco" class="input" type="number" min="0" step="0.01" placeholder="0,00" />
+              <span class="icon is-left"><i class="fa-solid fa-coins"></i></span>
+            </div>
+            <p class="help">Custo base sem tributos.</p>
+          </div>
+        </div>
+
+        <!-- Tributos detalhados -->
+        <div class="column is-2">
+          <div class="field">
+            <label class="label">ICMS (%)</label>
+            <div class="control"><input id="icms" class="input" type="number" min="0" step="0.01" placeholder="ex.: 12" /></div>
+          </div>
+        </div>
+        <div class="column is-2">
+          <div class="field">
+            <label class="label">PIS (%)</label>
+            <div class="control"><input id="pis" class="input" type="number" min="0" step="0.01" placeholder="ex.: 1.65" /></div>
+          </div>
+        </div>
+        <div class="column is-2">
+          <div class="field">
+            <label class="label">COFINS (%)</label>
+            <div class="control"><input id="cofins" class="input" type="number" min="0" step="0.01" placeholder="ex.: 7.6" /></div>
+          </div>
+        </div>
+        <div class="column is-2">
+          <div class="field">
+            <label class="label">ST (%)</label>
+            <div class="control"><input id="st" class="input" type="number" min="0" step="0.01" placeholder="ex.: 0" /></div>
+          </div>
+        </div>
+
+        <div class="column is-1">
+          <div class="field">
+            <label class="label">Tributos (%)</label>
+            <div class="control"><input id="tributos" class="input" type="number" readonly /></div>
+            <p class="help">Soma: ICMS + PIS + COFINS + ST.</p>
+          </div>
+        </div>
+
+        <div class="column is-2">
+          <div class="field">
+            <label class="label is-required">Unidade</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="unidade">
+                  <option>un</option><option>pc</option><option>sc</option><option>pct</option><option>dz</option>
+                  <option>fardo</option><option>tubo</option><option>barra</option><option>metro</option>
+                  <option>225ml</option><option>900ml</option><option>galao</option><option>lata</option><option>kg</option><option>caixa</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-2">
+          <div class="field">
+            <label class="label">Quantidade</label>
+            <div class="control"><input id="quantidade" class="input" type="number" min="1" step="1" value="1" /></div>
+          </div>
+        </div>
+
+        <!-- Método -->
+        <div class="column is-12">
+          <label class="label">Método de cálculo</label>
+          <div class="tags has-addons">
+            <span class="tag is-dark">Aplicar</span>
+            <span id="tagMethodMarkup" class="tag method is-info is-light is-active">Markup</span>
+            <span id="tagMethodMargem" class="tag method is-link is-light">Margem</span>
+            <span id="tagMethodPV" class="tag method is-primary is-light">Preço de venda</span>
+          </div>
+          <p class="help">Ao digitar <strong>Preço de venda</strong>, Markup e Margem são calculados automaticamente. Bloqueio impede PV &lt; custo efetivo.</p>
+        </div>
+
+        <div class="column is-3">
+          <div class="field">
+            <label class="label">Markup (%)</label>
+            <div class="control has-icons-left">
+              <input id="markup" class="input" type="number" min="0" step="0.01" placeholder="ex.: 35" />
+              <span class="icon is-left"><i class="fa-solid fa-arrow-trend-up"></i></span>
+            </div>
+            <p class="help">pv = custoEfetivo × (1 + markup/100)</p>
+          </div>
+        </div>
+
+        <div class="column is-3">
+          <div class="field">
+            <label class="label">Margem (%)</label>
+            <div class="control has-icons-left">
+              <input id="margem" class="input" type="number" min="0" max="99.999" step="0.01" placeholder="ex.: 25" />
+              <span class="icon is-left"><i class="fa-solid fa-percent"></i></span>
+            </div>
+            <p class="help">pv = custoEfetivo ÷ (1 − margem/100)</p>
+          </div>
+        </div>
+
+        <div class="column is-3">
+          <div class="field">
+            <label class="label">Preço de venda (R$)</label>
+            <div class="control has-icons-left">
+              <input id="precoVendaInput" class="input" type="number" min="0" step="0.01" placeholder="0,00" />
+              <span class="icon is-left"><i class="fa-solid fa-tag"></i></span>
+            </div>
+            <p class="help">Ao digitar aqui, Markup e Margem são recalculados.</p>
+          </div>
+        </div>
+
+        <div class="column is-3">
+          <div class="field">
+            <label class="label">URL para QR Code</label>
+            <div class="control has-icons-left">
+              <input id="produtoUrl" class="input" type="url" placeholder="https://minha-loja.com/p/123" />
+              <span class="icon is-left"><i class="fa-solid fa-qrcode"></i></span>
+            </div>
+            <p class="help">Opcional. Será impresso na etiqueta como QR.</p>
+          </div>
+        </div>
+
+        <!-- EAN-13 com prefixo BR -->
+        <div class="column is-6">
+          <div class="field">
+            <label class="label">Código de barras (EAN-13)</label>
+            <div class="field has-addons">
+              <p class="control is-expanded">
+                <input id="ean" class="input" type="text" maxlength="13" placeholder="Somente números (13 dígitos)" />
+              </p>
+              <p class="control">
+                <div class="select">
+                  <select id="eanPrefix">
+                    <option value="789" selected>BR 789 (GS1 Brasil)</option>
+                    <option value="790">BR 790 (GS1 Brasil)</option>
+                  </select>
+                </div>
+              </p>
+              <p class="control">
+                <button id="btnGerarEAN" class="button is-primary"><i class="fa-solid fa-barcode mr-2"></i>Gerar EAN13</button>
+              </p>
+            </div>
+            <p class="help">Geração com prefixo brasileiro (GS1 Brasil). Para uso comercial real, obtenha códigos na GS1.</p>
+            <svg id="eanPreview" class="barcode-canvas"></svg>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="column is-6">
+          <div class="field">
+            <label class="label">Pré-visualização</label>
+            <div class="notification is-light">
+              <div><strong>Tributos (% somatório):</strong> <span id="prevTributos">0,00%</span></div>
+              <div><strong>Custo efetivo:</strong> <span id="prevCustoEfetivo">R$ 0,00</span></div>
+              <div><strong>Preço venda calculado:</strong> <span id="precoCalculado">R$ 0,00</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-12">
+          <div class="buttons sticky-actions">
+            <button id="btnAdicionar" class="button is-success"><i class="fa-solid fa-plus mr-2"></i>Adicionar</button>
+            <button id="btnAtualizar" class="button is-link is-light" disabled><i class="fa-solid fa-rotate mr-2"></i>Atualizar item</button>
+            <button id="btnLimpar" class="button is-warning is-light"><i class="fa-solid fa-broom mr-2"></i>Limpar</button>
+            <button id="btnZerar" class="button is-danger is-light"><i class="fa-solid fa-trash mr-2"></i>Apagar todos</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="card is-glass mb-4">
+    <div class="card-content">
+      <h2 class="title is-5">Produtos cadastrados</h2>
+      <div class="table-container">
+        <table class="table is-fullwidth is-striped is-hoverable" id="tabela">
+          <thead>
+            <tr>
+              <th data-nosort>#</th>
+              <th data-sort="descricao">Descrição <span class="sort-ind">↕</span></th>
+              <th data-sort="categoria">Categoria <span class="sort-ind">↕</span></th>
+              <th data-sort="fornecedor">Fornecedor <span class="sort-ind">↕</span></th>
+              <th data-sort="unidade">Unid. <span class="sort-ind">↕</span></th>
+              <th data-sort="quantidade" class="has-text-right">Qtde <span class="sort-ind">↕</span></th>
+              <th data-sort="preco" class="has-text-right">Custo (R$) <span class="sort-ind">↕</span></th>
+              <th data-sort="tributos" class="has-text-right">Tributos (%) <span class="sort-ind">↕</span></th>
+              <th data-nosort class="has-text-centered">Método</th>
+              <th data-sort="markup" class="has-text-right">Markup (%) <span class="sort-ind">↕</span></th>
+              <th data-sort="margem" class="has-text-right">Margem (%) <span class="sort-ind">↕</span></th>
+              <th data-sort="precoVenda" class="has-text-right">Preço venda (R$) <span class="sort-ind">↕</span></th>
+              <th data-sort="subtotal" class="has-text-right">Subtotal (R$) <span class="sort-ind">↕</span></th>
+              <th data-nosort>EAN-13</th>
+              <th data-nosort>URL</th>
+              <th data-nosort class="has-text-centered">Sel.</th>
+              <th data-nosort class="has-text-centered">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="columns">
+        <div class="column">
+          <div class="box">
+            <p class="heading">Total CUSTO (c/ tributos)</p>
+            <p id="totalSem" class="title is-4 has-text-grey-dark">R$ 0,00</p>
+          </div>
+        </div>
+        <div class="column">
+          <div class="box">
+            <p class="heading">Total VENDA</p>
+            <p id="totalCom" class="title is-4 has-text-success">R$ 0,00</p>
+          </div>
+        </div>
+        <div class="column">
+          <div class="box">
+            <p class="heading">Itens</p>
+            <p id="totalItens" class="title is-4">0</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="has-text-centered has-text-grey">Feito com ❤️ usando Bulma, JsBarcode, SheetJS, jsPDF e QRious.</p>
+    </div>
+  </div>
+
+</section>
+
+<script src="./script.js"></script>
+</body>
+</html>
