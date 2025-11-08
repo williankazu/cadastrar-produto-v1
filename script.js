@@ -3,7 +3,7 @@
    ESTADO & UTIL
 =========================== */
 const $ = (id)=>document.getElementById(id);
-const STORAGE_KEY = "produtos_markup_margem_pv_v5";
+const STORAGE_KEY = "produtos_markup_margem_pv_v9";
 const LOGO_KEY = "logo_dataurl_v1";
 const EAN_PREFIX_KEY = "ean_prefix_last";
 
@@ -15,6 +15,28 @@ let sortDir = 1;
 let filtroBusca = "";
 let filtroCategoria = "";
 let logoDataUrl = null;
+
+/* ========= CLIPBOARD ========= */
+async function copyToClipboard(texto){
+  try{
+    await navigator.clipboard.writeText(texto);
+    toast("Copiado!");
+  }catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = texto; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy");
+    ta.remove(); toast("Copiado!");
+  }
+}
+function toast(msg){
+  const n = document.createElement("div");
+  n.textContent = msg;
+  n.style.position="fixed"; n.style.right="16px"; n.style.bottom="16px";
+  n.style.background="rgba(0,0,0,.8)"; n.style.color="#fff"; n.style.padding="10px 14px";
+  n.style.borderRadius="10px"; n.style.zIndex=9999; n.style.fontSize="14px";
+  document.body.appendChild(n);
+  setTimeout(()=>n.remove(), 1200);
+}
 
 /* ===========================
    INIT
@@ -65,6 +87,10 @@ function bindEvents(){
 
   $("btnGerarEAN").addEventListener("click", (e)=>{ e.preventDefault(); gerarEANeDesenhar(); });
 
+  // COPY do formulário
+  $("btnCopyDescricaoForm").addEventListener("click", (e)=>{ e.preventDefault(); const t=$("descricao").value.trim(); if(t){ copyToClipboard(t); } });
+  $("btnCopyEANForm").addEventListener("click", (e)=>{ e.preventDefault(); const c=$("ean").value.trim(); if(c){ copyToClipboard(c); } });
+
   // CRUD
   $("btnAdicionar").addEventListener("click", adicionarProduto);
   $("btnAtualizar").addEventListener("click", atualizarProduto);
@@ -81,6 +107,8 @@ function bindEvents(){
   $("btnLabelsPDF").addEventListener("click", gerarEtiquetasPDF);
   // A4 (20 itens)
   $("btnA4Simple").addEventListener("click", imprimirA4_20itens);
+  // Copiar em massa
+  $("btnCopyMass").addEventListener("click", copiarSelecionadosEmMassa);
 
   // Filtros e ordenação
   $("filtroBusca").addEventListener("input", (e)=>{ filtroBusca = e.target.value.toLowerCase(); renderTabela(); });
@@ -382,8 +410,12 @@ function renderTabela(){
       <td>${p.produtoUrl ? `<a href="${p.produtoUrl}" target="_blank">Abrir</a>` : "<span class='has-text-grey'>—</span>"}</td>
       <td class="has-text-centered"><input type="checkbox" class="selRow" data-idx="${idx}"></td>
       <td class="has-text-centered">
-        <button class="button is-small is-link is-light" title="Editar" onclick="editarProduto(${idx})"><i class="fa-solid fa-pen"></i></button>
-        <button class="button is-small is-danger is-light" title="Excluir" onclick="excluirProduto(${idx})"><i class="fa-solid fa-trash"></i></button>
+        <div class="buttons are-small">
+          <button class="button is-link is-light" title="Editar" onclick="editarProduto(${idx})"><i class="fa-solid fa-pen"></i></button>
+          <button class="button is-danger is-light" title="Excluir" onclick="excluirProduto(${idx})"><i class="fa-solid fa-trash"></i></button>
+          <button class="button is-light" title="Copiar descrição" onclick="copiarDescricaoLinha(${idx})"><i class="fa-regular fa-copy"></i> DESC</button>
+          <button class="button is-light" title="Copiar EAN-13" onclick="copiarEANLinha(${idx})"><i class="fa-regular fa-copy"></i> EAN</button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -580,7 +612,7 @@ function gerarEtiquetasPDF(){
 
   let x = margin, y = margin, col=0;
 
-  items.forEach((p, idx)=>{
+  items.forEach((p)=>{
     if(y + labelH > pageH - margin){
       doc.addPage();
       x = margin; y = margin; col=0;
@@ -603,8 +635,9 @@ function gerarEtiquetasPDF(){
     const descLines = doc.splitTextToSize(desc, labelW - 4);
     doc.text(descLines, x+2, cursorY); cursorY += Math.min(2, descLines.length) * 4 + 1;
 
+    // meta (inclui UNIDADE)
     doc.setFontSize(8); doc.setTextColor(60);
-    const meta = `${p.categoria||""} • ${p.fornecedor||""} • ${p.unidade} • Qtde: ${p.quantidade}`;
+    const meta = `${p.categoria||""} • ${p.fornecedor||""} • Unid: ${p.unidade} • Qtde: ${p.quantidade}`;
     const metaLines = doc.splitTextToSize(meta, labelW - 4);
     doc.text(metaLines, x+2, cursorY); cursorY += 6;
 
@@ -634,10 +667,9 @@ function gerarEtiquetasPDF(){
 }
 
 /* ===========================
-   A4 SIMPLES (MÁX 20 ITENS): Descrição, PV e EAN-13
+   A4 SIMPLES (MÁX 20 ITENS): Descrição, UNIDADE, PV e EAN-13
 =========================== */
 function imprimirA4_20itens(){
-  // Selecionados -> até 20; se nenhum, pega os primeiros 20 da lista completa
   const checks = Array.from(document.querySelectorAll(".selRow:checked"));
   const selIdx = checks.map(c=>+c.getAttribute("data-idx"));
   let items = selIdx.length ? selIdx.map(i=>produtos[i]) : produtos.slice();
@@ -648,7 +680,7 @@ function imprimirA4_20itens(){
   const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
 
   const pageW = 210, pageH = 297, margin = 10;
-  const cols = 2, gapX = 8, rowH = 26; // 10 linhas x 2 colunas = 20 itens
+  const cols = 2, gapX = 8, rowH = 28; // 10 linhas x 2 colunas = 20 itens
   const cellW = (pageW - margin*2 - gapX*(cols-1)) / cols;
 
   doc.setFontSize(14);
@@ -658,7 +690,7 @@ function imprimirA4_20itens(){
   doc.text(`Gerado em ${dataHojeBR()}`, pageW - margin, 12, {align:"right"});
   doc.setTextColor(0);
 
-  let x = margin, y = 18, col = 0, count = 0;
+  let x = margin, y = 18, col = 0;
 
   items.forEach((p)=>{
     if(y + rowH > pageH - margin){
@@ -670,7 +702,6 @@ function imprimirA4_20itens(){
       x = margin; y = 18; col = 0;
     }
 
-    // moldura leve
     doc.setDrawColor(220); doc.setLineWidth(0.2);
     doc.rect(x, y, cellW, rowH);
 
@@ -680,23 +711,28 @@ function imprimirA4_20itens(){
     const lines = doc.splitTextToSize(desc, cellW - 4);
     doc.text(lines, x + 2, y + 6);
 
-    // Preço de venda
+    // UNIDADE (logo abaixo da descrição)
+    doc.setFontSize(9);
+    doc.setTextColor(80);
+    doc.text(`Unid: ${p.unidade}`, x + 2, y + 11);
+    doc.setTextColor(0);
+
+    // PV
     doc.setFontSize(11);
-    doc.text(`PV: ${toBR(p.precoVenda||0)}`, x + 2, y + 16);
+    doc.text(`PV: ${toBR(p.precoVenda||0)}`, x + 2, y + 18);
 
     // EAN texto
     const eanTxt = (p.ean && validarEAN13(p.ean)) ? p.ean : "—";
     doc.setFontSize(9);
-    doc.text(`EAN: ${eanTxt}`, x + 2, y + 21);
+    doc.text(`EAN: ${eanTxt}`, x + 2, y + 23);
 
     // Código de barras (pequeno)
     if(p.ean && validarEAN13(p.ean)){
       const barData = gerarBarcodeDataURL(p.ean, 220, 70);
       if(barData){
-        // área reservada à direita do bloco (largura ~ cellW - 60)
-        const imgW = Math.min(cellW - 60, 60); // cabe bem sem distorção
+        const imgW = Math.min(cellW - 60, 60);
         const imgH = 10;
-        doc.addImage(barData, "PNG", x + cellW - imgW - 2, y + 12, imgW, imgH, undefined, "FAST");
+        doc.addImage(barData, "PNG", x + cellW - imgW - 2, y + 14, imgW, imgH, undefined, "FAST");
       }
     }
 
@@ -704,16 +740,37 @@ function imprimirA4_20itens(){
     col++;
     if(col >= cols){ col = 0; x = margin; y += rowH + 4; }
     else { x += cellW + gapX; }
-
-    count++;
   });
 
   doc.save("lista-a4-20itens.pdf");
 }
 
 /* ===========================
-   EVENTOS TABELA (GLOBAL)
+   COPY EM MASSA (selecionados)
+=========================== */
+function copiarSelecionadosEmMassa(){
+  const checks = Array.from(document.querySelectorAll(".selRow:checked"));
+  const selIdx = checks.map(c=>+c.getAttribute("data-idx"));
+  let items = selIdx.length ? selIdx.map(i=>produtos[i]) : produtos.slice();
+  if(!items.length){ toast("Nenhum item."); return; }
+
+  const linhas = items.map((p,i)=>{
+    const eanStr = (p.ean && validarEAN13(p.ean)) ? p.ean : "—";
+    return `${i+1}. ${p.descricao}  |  EAN: ${eanStr}`;
+  });
+  copyToClipboard(linhas.join("\n"));
+}
+
+/* ===========================
+   COPY NA TABELA (GLOBAL)
 =========================== */
 window.editarProduto = editarProduto;
 window.excluirProduto = excluirProduto;
-
+window.copiarDescricaoLinha = function(idx){
+  const p = produtos[idx]; if(!p) return;
+  if(p.descricao) copyToClipboard(p.descricao);
+};
+window.copiarEANLinha = function(idx){
+  const p = produtos[idx]; if(!p) return;
+  if(p.ean) copyToClipboard(p.ean);
+};
