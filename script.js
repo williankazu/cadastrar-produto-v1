@@ -3,7 +3,7 @@
    ESTADO & UTIL
 =========================== */
 const $ = (id)=>document.getElementById(id);
-const STORAGE_KEY = "produtos_markup_margem_pv_v9";
+const STORAGE_KEY = "produtos_markup_margem_pv_v12_fix_center_fit";
 const LOGO_KEY = "logo_dataurl_v1";
 const EAN_PREFIX_KEY = "ean_prefix_last";
 
@@ -35,7 +35,7 @@ function toast(msg){
   n.style.background="rgba(0,0,0,.8)"; n.style.color="#fff"; n.style.padding="10px 14px";
   n.style.borderRadius="10px"; n.style.zIndex=9999; n.style.fontSize="14px";
   document.body.appendChild(n);
-  setTimeout(()=>n.remove(), 1200);
+  setTimeout(()=>n.remove(), 1400);
 }
 
 /* ===========================
@@ -68,7 +68,6 @@ function bindEvents(){
     $(id).addEventListener("input", atualizarPreview);
   });
 
-  // atualiza tributos somados ao alterar qualquer tributo
   ["icms","pis","cofins","st"].forEach(id=>{
     $(id).addEventListener("input", somarTributos);
   });
@@ -80,7 +79,6 @@ function bindEvents(){
     desenharEAN(code);
   });
 
-  // EAN (prefixo BR)
   $("eanPrefix").addEventListener("change", (e)=>{
     localStorage.setItem(EAN_PREFIX_KEY, e.target.value);
   });
@@ -103,12 +101,21 @@ function bindEvents(){
   $("btnExportPDF").addEventListener("click", exportarPDF);
   $("fileImport").addEventListener("change", importarArquivo);
 
-  // Etiquetas PDF
+  // Etiquetas PDF padrão
   $("btnLabelsPDF").addEventListener("click", gerarEtiquetasPDF);
   // A4 (20 itens)
   $("btnA4Simple").addEventListener("click", imprimirA4_20itens);
   // Copiar em massa
   $("btnCopyMass").addEventListener("click", copiarSelecionadosEmMassa);
+  // Excluir selecionados
+  $("btnDeleteSelected").addEventListener("click", excluirSelecionados);
+  // Select all
+  $("selAll").addEventListener("change", toggleSelectAll);
+  // Imprimir Personalizado (modal)
+  $("btnPrintCustom").addEventListener("click", abrirModalImpressao);
+  $("modalPrintClose").addEventListener("click", fecharModalImpressao);
+  $("modalPrintCancel").addEventListener("click", fecharModalImpressao);
+  $("modalPrintConfirm").addEventListener("click", confirmarImpressaoPersonalizada);
 
   // Filtros e ordenação
   $("filtroBusca").addEventListener("input", (e)=>{ filtroBusca = e.target.value.toLowerCase(); renderTabela(); });
@@ -358,6 +365,25 @@ function zerarTudo(){
 }
 
 /* ===========================
+   SELEÇÃO & EXCLUSÃO EM MASSA
+=========================== */
+function getSelectedIndices(){
+  return Array.from(document.querySelectorAll(".selRow:checked")).map(c=>+c.dataset.idx);
+}
+function toggleSelectAll(e){
+  const check = e.target.checked;
+  document.querySelectorAll(".selRow").forEach(cb=>{ cb.checked = check; });
+}
+function excluirSelecionados(){
+  const idxs = getSelectedIndices();
+  if(!idxs.length){ alert("Nenhum item selecionado."); return; }
+  if(!confirm(`Excluir ${idxs.length} item(ns) selecionado(s)?`)) return;
+  idxs.sort((a,b)=>b-a).forEach(i=>produtos.splice(i,1));
+  salvar(); renderTabela();
+  $("selAll").checked = false;
+}
+
+/* ===========================
    RENDER + FILTRO + SORT + TOTAIS
 =========================== */
 function renderTabela(){
@@ -389,7 +415,9 @@ function renderTabela(){
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${iInList+1}</td>
+      <td class="has-text-centered">
+        <input type="checkbox" class="selRow" data-idx="${idx}">
+      </td>
       <td>${escapeHTML(p.descricao)}</td>
       <td>${escapeHTML(p.categoria||"")}</td>
       <td>${escapeHTML(p.fornecedor||"")}</td>
@@ -408,7 +436,6 @@ function renderTabela(){
       <td class="has-text-right">${formatBR((p.precoVenda||0) * (p.quantidade||1))}</td>
       <td>${p.ean ? `<small>${p.ean}</small><br><svg id="eanRow_${idx}" class="barcode-canvas"></svg>` : "<span class='has-text-grey'>—</span>"}</td>
       <td>${p.produtoUrl ? `<a href="${p.produtoUrl}" target="_blank">Abrir</a>` : "<span class='has-text-grey'>—</span>"}</td>
-      <td class="has-text-centered"><input type="checkbox" class="selRow" data-idx="${idx}"></td>
       <td class="has-text-centered">
         <div class="buttons are-small">
           <button class="button is-link is-light" title="Editar" onclick="editarProduto(${idx})"><i class="fa-solid fa-pen"></i></button>
@@ -577,7 +604,7 @@ function importarJSON(json){
 }
 
 /* ===========================
-   ETIQUETAS PDF (logo + data + QR + código de barras)
+   ETIQUETAS PDF padrão
 =========================== */
 function dataHojeBR(){
   const d = new Date();
@@ -596,10 +623,12 @@ function gerarQRDataURL(text, size=100){
   const qr = new QRious({ value: text || "", size });
   return qr.toDataURL("image/png");
 }
+function itensSelecionadosOuTodos(){
+  const selIdx = getSelectedIndices();
+  return selIdx.length ? selIdx.map(i=>produtos[i]) : produtos.slice();
+}
 function gerarEtiquetasPDF(){
-  const checks = Array.from(document.querySelectorAll(".selRow:checked"));
-  const selIdx = checks.map(c=>+c.getAttribute("data-idx"));
-  const items = selIdx.length ? selIdx.map(i=>produtos[i]) : produtos.slice();
+  const items = itensSelecionadosOuTodos();
   if(!items.length){ alert("Nenhum item para etiquetas."); return; }
 
   const { jsPDF } = window.jspdf;
@@ -609,6 +638,7 @@ function gerarEtiquetasPDF(){
   const pageW = 210, pageH = 297;
   const labelW = (pageW - margin*2 - gap*(cols-1)) / cols;
   const labelH = 38;
+  const pad = 3; // padding interno
 
   let x = margin, y = margin, col=0;
 
@@ -621,41 +651,56 @@ function gerarEtiquetasPDF(){
     doc.setDrawColor(200); doc.setLineWidth(0.2);
     doc.rect(x, y, labelW, labelH);
 
-    let cursorY = y + 4;
+    const cx = x + labelW/2;
+    const innerW = labelW - 2*pad;
+    let cursorY = y + pad;
+
     if(logoDataUrl){
-      const maxLW = 18, maxLH = 8;
-      doc.addImage(logoDataUrl, "PNG", x+2, cursorY, maxLW, maxLH, undefined, "FAST");
+      const maxLW = Math.min(18, innerW);
+      const maxLH = 8;
+      doc.addImage(logoDataUrl, "PNG", cx - (maxLW/2), cursorY, maxLW, maxLH, undefined, "FAST");
+      cursorY += maxLH + 1.5;
     }
+
     doc.setFontSize(8); doc.setTextColor(80);
-    doc.text(`Data: ${dataHojeBR()}`, x + labelW - 2, cursorY + 4, {align:"right", baseline:"middle"});
-    cursorY += 10;
+    doc.text(`Data: ${dataHojeBR()}`, cx, cursorY, {align:"center"});
+    cursorY += 4;
 
     doc.setFontSize(10); doc.setTextColor(0);
     const desc = (p.descricao||"").toString();
-    const descLines = doc.splitTextToSize(desc, labelW - 4);
-    doc.text(descLines, x+2, cursorY); cursorY += Math.min(2, descLines.length) * 4 + 1;
+    const descLines = doc.splitTextToSize(desc, innerW);
+    const linesPrinted = Math.min(2, descLines.length);
+    doc.text(descLines.slice(0,linesPrinted), cx, cursorY, {align:"center"});
+    cursorY += linesPrinted*4 + 1;
 
-    // meta (inclui UNIDADE)
     doc.setFontSize(8); doc.setTextColor(60);
-    const meta = `${p.categoria||""} • ${p.fornecedor||""} • Unid: ${p.unidade} • Qtde: ${p.quantidade}`;
-    const metaLines = doc.splitTextToSize(meta, labelW - 4);
-    doc.text(metaLines, x+2, cursorY); cursorY += 6;
+    doc.text(`Unid: ${p.unidade}`, cx, cursorY, {align:"center"});
+    cursorY += 5;
 
     doc.setFontSize(12); doc.setTextColor(0);
-    doc.text(`Preço: ${toBR(p.precoVenda||0)}`, x+2, cursorY); cursorY += 6;
+    doc.text(`Preço: ${toBR(p.precoVenda||0)}`, cx, cursorY, {align:"center"});
+    cursorY += 6;
 
-    if(p.ean && validarEAN13(p.ean)){
+    // Espaço restante dentro da etiqueta
+    let remainingH = y + labelH - pad - cursorY;
+
+    // Desenha barcode dentro do espaço restante
+    if(p.ean && validarEAN13(p.ean) && remainingH > 6){
       const barData = gerarBarcodeDataURL(p.ean, 280, 90);
       if(barData){
-        const qrZone = 16;
-        const imgW = Math.max(20, labelW - qrZone - 6);
-        const imgH = 10;
-        doc.addImage(barData, "PNG", x+2, cursorY, imgW, imgH, undefined, "FAST");
+        const barW = innerW;                   // ocupa a largura útil
+        const barH = Math.max(8, Math.min(12, remainingH - 2)); // nunca passa da borda
+        doc.addImage(barData, "PNG", cx - (barW/2), cursorY, barW, barH, undefined, "FAST");
+        cursorY += barH + 1.5;
+        remainingH = y + labelH - pad - cursorY;
       }
     }
-    if(p.produtoUrl){
-      const qrData = gerarQRDataURL(p.produtoUrl, 128);
-      doc.addImage(qrData, "PNG", x + labelW - 16 - 2, cursorY - 2, 16, 16, undefined, "FAST");
+
+    // QR dentro do espaço restante (se houver URL)
+    if(p.produtoUrl && remainingH > 8){
+      const qrSize = Math.max(10, Math.min(14, remainingH)); // cabe no resto
+      doc.addImage(gerarQRDataURL(p.produtoUrl, 128), "PNG", cx - (qrSize/2), cursorY, qrSize, qrSize, undefined, "FAST");
+      cursorY += qrSize;
     }
 
     col++;
@@ -667,12 +712,179 @@ function gerarEtiquetasPDF(){
 }
 
 /* ===========================
-   A4 SIMPLES (MÁX 20 ITENS): Descrição, UNIDADE, PV e EAN-13
+   IMPRESSÃO PERSONALIZADA (Centralizada + FIT garantido)
+=========================== */
+function abrirModalImpressao(){
+  const items = itensSelecionadosOuTodos();
+  if(!items.length){ alert("Nenhum item selecionado ou cadastrado."); return; }
+
+  const container = document.getElementById("qtyList");
+  container.innerHTML = `
+    <div class="table-container">
+      <table class="table is-fullwidth is-striped is-hoverable is-size-7">
+        <thead>
+          <tr>
+            <th>#</th><th>Descrição</th><th>Unid.</th><th>PV</th><th>EAN</th><th class="has-text-right">Qtd Etiquetas</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((p,i)=>`
+            <tr>
+              <td>${i+1}</td>
+              <td>${escapeHTML(p.descricao)}</td>
+              <td>${escapeHTML(p.unidade)}</td>
+              <td>${toBR(p.precoVenda||0)}</td>
+              <td>${p.ean||"—"}</td>
+              <td class="has-text-right">
+                <input type="number" min="0" step="1" value="1" class="input is-small qty-input" data-idx="${produtos.indexOf(p)}">
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("modalPrint").classList.add("is-active");
+}
+function fecharModalImpressao(){
+  document.getElementById("modalPrint").classList.remove("is-active");
+}
+function confirmarImpressaoPersonalizada(){
+  const opts = {
+    logo: document.getElementById("optLogo").checked,
+    data: document.getElementById("optData").checked,
+    desc: document.getElementById("optDesc").checked,
+    unid: document.getElementById("optUnid").checked,
+    preco: document.getElementById("optPreco").checked,
+    ean: document.getElementById("optEAN").checked,
+    qr: document.getElementById("optQR").checked,
+    compacto: document.getElementById("optCompact").checked
+  };
+  const qtyInputs = Array.from(document.querySelectorAll("#qtyList .qty-input"));
+  const itensComQtd = qtyInputs.map(input=>{
+    const idx = +input.dataset.idx;
+    const qtd = Math.max(0, parseInt(input.value||"0"));
+    return { produto: produtos[idx], qtd };
+  }).filter(x=>x.qtd>0);
+
+  if(!itensComQtd.length){ alert("Defina ao menos 1 etiqueta a imprimir."); return; }
+
+  gerarEtiquetasPersonalizadasPDF(opts, itensComQtd);
+  fecharModalImpressao();
+}
+
+function gerarEtiquetasPersonalizadasPDF(opts, itensComQtd){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+
+  const margin = 8;
+  const pageW = 210, pageH = 297;
+  const cols = opts.compacto ? 4 : 3;
+  const gap = opts.compacto ? 5 : 6;
+  const labelW = (pageW - margin*2 - gap*(cols-1)) / cols;
+  const labelH = opts.compacto ? 30 : 38;
+  const fontScale = opts.compacto ? 0.9 : 1.0;
+  const pad = 3; // *** padding interno para não encostar na borda ***
+
+  let x = margin, y = margin, col=0;
+
+  const expandidos = [];
+  itensComQtd.forEach(({produto, qtd})=>{
+    for(let i=0;i<qtd;i++) expandidos.push(produto);
+  });
+
+  expandidos.forEach((p)=>{
+    if(y + labelH > pageH - margin){
+      doc.addPage();
+      x = margin; y = margin; col=0;
+    }
+
+    // Borda da etiqueta
+    doc.setDrawColor(210); doc.setLineWidth(0.2);
+    doc.rect(x, y, labelW, labelH);
+
+    // Geometria interna
+    const innerW = labelW - 2*pad;
+    const cx = x + labelW/2;
+    let cursorY = y + pad;
+
+    // LOGO
+    if(opts.logo && typeof logoDataUrl === "string" && logoDataUrl.length){
+      const maxLW = Math.min(18 * fontScale, innerW);
+      const maxLH = 7  * fontScale;
+      doc.addImage(logoDataUrl, "PNG", cx - (maxLW/2), cursorY, maxLW, maxLH, undefined, "FAST");
+      cursorY += maxLH + 1.5;
+    }
+
+    // Data
+    if(opts.data){
+      doc.setFontSize(7*fontScale); doc.setTextColor(80);
+      doc.text(`Data: ${dataHojeBR()}`, cx, cursorY, {align:"center"});
+      cursorY += 3.8;
+    }
+
+    // Descrição (máx 2 linhas) — centralizada e com largura útil
+    if(opts.desc){
+      doc.setFontSize(9*fontScale); doc.setTextColor(0);
+      const desc = (p.descricao||"").toString();
+      const descLines = doc.splitTextToSize(desc, Math.max(10, innerW));
+      const linesPrinted = Math.min(2, descLines.length);
+      doc.text(descLines.slice(0,linesPrinted), cx, cursorY, {align:"center"});
+      cursorY += linesPrinted * (opts.compacto?3.5:4) + 0.5;
+    }
+
+    // Unidade
+    if(opts.unid){
+      doc.setFontSize(7.5*fontScale); doc.setTextColor(60);
+      doc.text(`Unid: ${p.unidade}`, cx, cursorY, {align:"center"});
+      cursorY += opts.compacto ? 4.3 : 5;
+    }
+
+    // Preço
+    if(opts.preco){
+      doc.setFontSize(11*fontScale); doc.setTextColor(0);
+      doc.text(`Preço: ${toBR(p.precoVenda||0)}`, cx, cursorY, {align:"center"});
+      cursorY += opts.compacto ? 5.5 : 6;
+    }
+
+    // Espaço restante dentro da etiqueta
+    let remainingH = (y + labelH - pad) - cursorY;
+
+    // Código de barras (usa toda a largura útil e ajusta altura ao espaço disponível)
+    if(opts.ean && p.ean && validarEAN13(p.ean) && remainingH > 6){
+      const barData = gerarBarcodeDataURL(p.ean, 240, 80);
+      if(barData){
+        const barW = innerW; // largura útil total
+        // altura adequada: no mínimo 8mm e no máximo 12mm, respeitando o espaço
+        const barH = Math.max(8, Math.min(12, remainingH - (opts.qr ? 12 : 2))); 
+        doc.addImage(barData, "PNG", cx - (barW/2), cursorY, barW, barH, undefined, "FAST");
+        cursorY += barH + 1.5;
+        remainingH = (y + labelH - pad) - cursorY;
+      }
+    }
+
+    // QR centralizado, somente se houver espaço restante
+    if(opts.qr && p.produtoUrl && remainingH > 8){
+      const size = Math.max(10, Math.min(14, remainingH)); // ajusta ao espaço
+      const qrData = gerarQRDataURL(p.produtoUrl, 128);
+      doc.addImage(qrData, "PNG", cx - (size/2), cursorY, size, size, undefined, "FAST");
+      cursorY += size;
+    }
+
+    // próxima etiqueta
+    col++;
+    if(col>=cols){ col=0; x = margin; y += labelH + (opts.compacto?4:6); }
+    else { x += labelW + gap; }
+  });
+
+  doc.save("etiquetas-personalizadas.pdf");
+}
+
+/* ===========================
+   A4 SIMPLES (MÁX 20 ITENS)
 =========================== */
 function imprimirA4_20itens(){
-  const checks = Array.from(document.querySelectorAll(".selRow:checked"));
-  const selIdx = checks.map(c=>+c.getAttribute("data-idx"));
-  let items = selIdx.length ? selIdx.map(i=>produtos[i]) : produtos.slice();
+  let items = itensSelecionadosOuTodos();
   if(!items.length){ alert("Nenhum item selecionado ou cadastrado."); return; }
   if(items.length > 20){ items = items.slice(0,20); }
 
@@ -711,7 +923,7 @@ function imprimirA4_20itens(){
     const lines = doc.splitTextToSize(desc, cellW - 4);
     doc.text(lines, x + 2, y + 6);
 
-    // UNIDADE (logo abaixo da descrição)
+    // UNIDADE
     doc.setFontSize(9);
     doc.setTextColor(80);
     doc.text(`Unid: ${p.unidade}`, x + 2, y + 11);
@@ -726,7 +938,7 @@ function imprimirA4_20itens(){
     doc.setFontSize(9);
     doc.text(`EAN: ${eanTxt}`, x + 2, y + 23);
 
-    // Código de barras (pequeno)
+    // Código de barras pequeno
     if(p.ean && validarEAN13(p.ean)){
       const barData = gerarBarcodeDataURL(p.ean, 220, 70);
       if(barData){
@@ -746,12 +958,10 @@ function imprimirA4_20itens(){
 }
 
 /* ===========================
-   COPY EM MASSA (selecionados)
+   COPY EM MASSA & COPIES
 =========================== */
 function copiarSelecionadosEmMassa(){
-  const checks = Array.from(document.querySelectorAll(".selRow:checked"));
-  const selIdx = checks.map(c=>+c.getAttribute("data-idx"));
-  let items = selIdx.length ? selIdx.map(i=>produtos[i]) : produtos.slice();
+  const items = itensSelecionadosOuTodos();
   if(!items.length){ toast("Nenhum item."); return; }
 
   const linhas = items.map((p,i)=>{
@@ -760,10 +970,6 @@ function copiarSelecionadosEmMassa(){
   });
   copyToClipboard(linhas.join("\n"));
 }
-
-/* ===========================
-   COPY NA TABELA (GLOBAL)
-=========================== */
 window.editarProduto = editarProduto;
 window.excluirProduto = excluirProduto;
 window.copiarDescricaoLinha = function(idx){

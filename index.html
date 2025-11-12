@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cadastro de Produtos • Markup, Margem, PV • EAN-13 BR • Etiquetas & A4 • Copy em Massa</title>
+<title>Cadastro de Produtos • Markup, Margem, PV • EAN-13 BR • Etiquetas & A4</title>
 
 <!-- Bulma -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
@@ -24,7 +24,7 @@
 <body>
 <section class="container-box">
 
-  <!-- Header reorganizado com espaçamento -->
+  <!-- Header -->
   <div class="card is-glass mb-4">
     <div class="card-content">
       <div class="columns is-vcentered is-multiline">
@@ -33,23 +33,17 @@
           <h2 class="subtitle is-6 mb-3">
             <strong>Funções:</strong> Markup, Margem e PV — PV mínimo (≥ custo efetivo),
             tributos detalhados (ICMS/PIS/COFINS/ST), EAN-13 BR (789/790), filtros e ordenação,
-            etiquetas com logo + QR e PDF (A4 com até 20 itens), <strong>copiar linha</strong> e
-            <strong>copiar em massa</strong>.
+            etiquetas com logo + QR e PDF (A4 com até 20 itens), <strong>copiar linha</strong>,
+            <strong>copiar em massa</strong>, <strong>selecionar todos</strong>,
+            <strong>excluir selecionados</strong> e <strong>impressão personalizada</strong>.
           </h2>
         </div>
 
         <div class="column is-5 header-actions">
           <div class="buttons is-justify-content-flex-end is-flex-wrap-wrap">
-            <!-- Linha 1 -->
-            <button id="btnExportCSV" class="button is-link is-small">
-              <i class="fa-solid fa-file-csv mr-1"></i> CSV
-            </button>
-            <button id="btnExportXLSX" class="button is-info is-small">
-              <i class="fa-solid fa-file-excel mr-1"></i> Excel
-            </button>
-            <button id="btnExportPDF" class="button is-danger is-small">
-              <i class="fa-solid fa-file-pdf mr-1"></i> Relatório
-            </button>
+            <button id="btnExportCSV" class="button is-link is-small"><i class="fa-solid fa-file-csv mr-1"></i> CSV</button>
+            <button id="btnExportXLSX" class="button is-info is-small"><i class="fa-solid fa-file-excel mr-1"></i> Excel</button>
+            <button id="btnExportPDF" class="button is-danger is-small"><i class="fa-solid fa-file-pdf mr-1"></i> Relatório</button>
             <div class="file is-primary is-small">
               <label class="file-label">
                 <input id="fileImport" class="file-input" type="file" accept=".csv,.xlsx,.xls">
@@ -59,16 +53,11 @@
                 </span>
               </label>
             </div>
-            <!-- Linha 2 -->
-            <button id="btnLabelsPDF" class="button is-primary is-small">
-              <i class="fa-solid fa-tags mr-1"></i> Etiquetas PDF
-            </button>
-            <button id="btnA4Simple" class="button is-warning is-small">
-              <i class="fa-solid fa-print mr-1"></i> A4 (20 itens)
-            </button>
-            <button id="btnCopyMass" class="button is-light is-small">
-              <i class="fa-regular fa-copy mr-1"></i> Copiar Selecionados (DESC/EAN)
-            </button>
+            <button id="btnLabelsPDF" class="button is-primary is-small"><i class="fa-solid fa-tags mr-1"></i> Etiquetas PDF</button>
+            <button id="btnA4Simple" class="button is-warning is-small"><i class="fa-solid fa-print mr-1"></i> A4 (20 itens)</button>
+            <button id="btnCopyMass" class="button is-light is-small"><i class="fa-regular fa-copy mr-1"></i> Copiar Selecionados (DESC/EAN)</button>
+            <button id="btnDeleteSelected" class="button is-danger is-light is-small"><i class="fa-solid fa-trash-can mr-1"></i> Excluir Selecionados</button>
+            <button id="btnPrintCustom" class="button is-dark is-small"><i class="fa-solid fa-print mr-1"></i> Imprimir Personalizado</button>
           </div>
 
           <div class="field mt-3">
@@ -347,7 +336,11 @@
         <table class="table is-fullwidth is-striped is-hoverable" id="tabela">
           <thead>
             <tr>
-              <th data-nosort>#</th>
+              <th data-nosort class="has-text-centered">
+                <label class="checkbox">
+                  <input type="checkbox" id="selAll"> Sel. Todos
+                </label>
+              </th>
               <th data-sort="descricao">Descrição <span class="sort-ind">↕</span></th>
               <th data-sort="categoria">Categoria <span class="sort-ind">↕</span></th>
               <th data-sort="fornecedor">Fornecedor <span class="sort-ind">↕</span></th>
@@ -396,6 +389,47 @@
   </div>
 
 </section>
+
+<!-- MODAL: Impressão Personalizada -->
+<div class="modal" id="modalPrint">
+  <div class="modal-background"></div>
+  <div class="modal-card" style="max-width:900px;">
+    <header class="modal-card-head">
+      <p class="modal-card-title"><i class="fa-solid fa-print mr-2"></i>Impressão Personalizada de Etiquetas</p>
+      <button class="delete" aria-label="close" id="modalPrintClose"></button>
+    </header>
+    <section class="modal-card-body">
+      <div class="columns">
+        <div class="column is-5">
+          <h3 class="title is-6">Campos a incluir</h3>
+          <label class="checkbox"><input type="checkbox" id="optLogo" checked> Logo</label><br>
+          <label class="checkbox"><input type="checkbox" id="optData" checked> Data</label><br>
+          <label class="checkbox"><input type="checkbox" id="optDesc" checked> Descrição</label><br>
+          <label class="checkbox"><input type="checkbox" id="optUnid" checked> Unidade</label><br>
+          <label class="checkbox"><input type="checkbox" id="optPreco" checked> Preço de venda</label><br>
+          <label class="checkbox"><input type="checkbox" id="optEAN" checked> Código de barras (EAN-13)</label><br>
+          <label class="checkbox"><input type="checkbox" id="optQR" > QR Code (URL)</label><br>
+
+          <hr>
+          <h3 class="title is-6">Layout</h3>
+          <label class="checkbox">
+            <input type="checkbox" id="optCompact"> Compacto (caber mais etiquetas por página)
+          </label>
+          <p class="help">Compacto: fonte e altura reduzidas, 4 colunas; Normal: 3 colunas.</p>
+        </div>
+        <div class="column is-7">
+          <h3 class="title is-6">Quantidade por item</h3>
+          <p class="help">Edite as quantidades abaixo. Itens não selecionados na lista serão ignorados se tiver seleção ativa.</p>
+          <div id="qtyList"></div>
+        </div>
+      </div>
+    </section>
+    <footer class="modal-card-foot is-justify-content-flex-end">
+      <button class="button is-light" id="modalPrintCancel">Cancelar</button>
+      <button class="button is-dark" id="modalPrintConfirm"><i class="fa-solid fa-print mr-2"></i>Gerar PDF</button>
+    </footer>
+  </div>
+</div>
 
 <script src="./script.js"></script>
 </body>

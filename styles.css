@@ -5,39 +5,21 @@
   .card{ border-radius:16px; box-shadow:0 15px 30px rgba(0,0,0,.15); }
   .is-glass{ background:rgba(255,255,255,.92); backdrop-filter:blur(6px); }
 
-  /* Cabeçalho: espaçamento confortável */
-  .header-text h1.title {
-    line-height: 1.25;
-    letter-spacing: 0.2px;
-    margin-bottom: 0.9rem;   /* separa do subtítulo */
-  }
-  .header-text h2.subtitle {
-    line-height: 1.75;       /* mais respiro entre as linhas */
-    letter-spacing: 0.1px;
-    margin-top: 0.35rem;
-    margin-bottom: 1.15rem;  /* separa do restante do conteúdo */
-  }
-  @media (max-width: 768px) {
-    .header-text h1.title { line-height: 1.3; }
-    .header-text h2.subtitle { line-height: 1.85; }
-  }
-
-  /* Área de botões do header */
+  .header-text h1.title { line-height:1.25; letter-spacing:.2px; margin-bottom:.9rem; }
+  .header-text h2.subtitle { line-height:1.75; letter-spacing:.1px; margin:.35rem 0 1.15rem; }
   .header-actions .buttons { gap:.4rem; }
   .header-actions .button, .header-actions .file { margin-bottom:.4rem; }
 
-  /* Tabela */
   .table thead th{ position:sticky; top:0; background:#fff; z-index:2; cursor:pointer; }
   .table thead th[data-nosort]{ cursor:default; }
   .table thead th .sort-ind{ opacity:.5; margin-left:4px; }
+
   .barcode-canvas{ width:160px; height:56px; display:block; }
-
-  /* Ações fixas do formulário */
   .sticky-actions{ position:sticky; bottom:8px; z-index:3; display:flex; gap:8px; flex-wrap:wrap; }
-
   .is-required::after{ content:" *"; color:var(--err); }
   .tags .tag.method{ cursor:pointer; }
   .tag.is-active{ box-shadow:0 0 0 2px rgba(0,0,0,.06) inset; }
   .help.is-note{ color:#4b5563; font-size:.85rem; }
   .logo-preview{ max-height:40px; display:block; margin-top:6px; }
   .btn-compact{ padding-left:.6em; padding-right:.6em; }
+  .qty-input{ width:80px; }
